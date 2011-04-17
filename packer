@@ -80,7 +80,7 @@ usage() {
 runasroot() {
   if [[ $UID -eq 0 ]]; then
     "$@"
-  elif sudo -V &>/dev/null && sudo -l "$@" &>/dev/null; then
+  elif sudo -v &>/dev/null && sudo -l "$@" &>/dev/null; then
     sudo "$@"
   else
     echo -n "root "
@@ -300,7 +300,7 @@ aurinstall() {
       echo
       case "$answer" in
         'Y'|'y'|'')
-          eval ${EDITOR:-vi} PKGBUILD
+          ${EDITOR:-vi} PKGBUILD
           ;;
       esac
     fi
@@ -318,7 +318,7 @@ aurinstall() {
       echo
       case "$answer" in
         'Y'|'y'|'')
-          eval ${EDITOR:-vi} "$install"
+          ${EDITOR:-vi} "$install"
           ;;
       esac 
     fi
