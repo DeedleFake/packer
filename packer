@@ -293,7 +293,7 @@ aurinstall() {
   fi
 
   # Allow user to skip package installation
-  if ! [[ $noconfirm ]]; then
+  if ! [[ $noconfirm || $2 = dependency ]]; then
     echo -en "${COLOR6}Install ${COLOR5}$1${COLOR6}? [Y/n]${ENDCOLOR} "
     read answer
     case "$answer" in
@@ -344,7 +344,7 @@ aurinstall() {
   fi
 
   [[ $? -ne 0 ]] && echo "The build failed." && return 1
-  if  [[ $2 = dependency ]]; then
+  if [[ $2 = dependency ]]; then
     if [[ $PKGDEST ]]; then
       runasroot $outputpacman ${PACOPTS[@]} --asdeps -U "$PKGDEST"/$pkgname-*.pkg.tar.*
     else
