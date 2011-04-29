@@ -292,6 +292,16 @@ aurinstall() {
     cd "$1"
   fi
 
+  # Allow user to skip package installation
+  echo -en "${COLOR6}Install $1? [Y/n]${ENDCOLOR} "
+  read answer
+  case "$answer" in
+    'N'|'n')
+      echo -e "${COLOR7}Skipping ${COLOR5}$1${COLOR7}...${ENDCOLOR}\n"
+      return
+      ;;
+  esac
+
   # Allow user to edit PKGBUILD
   if [[ -f PKGBUILD ]]; then
     if ! [[ $noconfirm || $noedit ]]; then
