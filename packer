@@ -293,19 +293,21 @@ aurinstall() {
   fi
 
   # Allow user to skip package installation
-  echo -en "${COLOR6}Install $1? [Y/n]${ENDCOLOR} "
-  read answer
-  case "$answer" in
-    'N'|'n')
-      echo -e "${COLOR7}Skipping ${COLOR5}$1${COLOR7}...${ENDCOLOR}\n"
-      return
-      ;;
-  esac
+  if ! [[ $noconfirm ]]; then
+    echo -en "${COLOR6}Install ${COLOR5}$1${COLOR6}? [Y/n]${ENDCOLOR} "
+    read answer
+    case "$answer" in
+      'N'|'n')
+        echo -e "${COLOR7}Skipping ${COLOR5}$1${COLOR7}...${ENDCOLOR}\n"
+        return
+        ;;
+    esac
+  fi
 
   # Allow user to edit PKGBUILD
   if [[ -f PKGBUILD ]]; then
     if ! [[ $noconfirm || $noedit ]]; then
-      echo -en "${COLOR6}Edit $1 PKGBUILD with \$EDITOR? [Y/n]${ENDCOLOR} "
+      echo -en "${COLOR6}Edit ${COLOR5}$1${COLOR6} PKGBUILD with \$EDITOR? [Y/n]${ENDCOLOR} "
       read answer
       echo
       case "$answer" in
