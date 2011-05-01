@@ -325,7 +325,7 @@ aurinstall() {
   . PKGBUILD
   if [[ $install ]]; then
     if ! [[ $noconfirm || $noedit ]]; then
-      echo -en "${COLOR6}Edit $install with \$EDITOR? [Y/n]${ENDCOLOR} "
+      echo -en "${COLOR6}Edit ${COLOR5}$install${COLOR6} with \$EDITOR? [Y/n]${ENDCOLOR} "
       read answer
       echo
       case "$answer" in
