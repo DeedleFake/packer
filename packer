@@ -509,7 +509,7 @@ while [[ $1 ]]; do
     '-Ss') option=search ;;
     '-Ssq'|'-Sqs') option=search ; quiet='1' ;;
     '-Si') option=info ;;
-    '-Su'|'-Suy'|'-Syu'|'-Syyu'|'-Suyy'|'Syuy') option=update ; pacmanarg="$1" ;;
+    '-Su'|'-Suy'|'-Syu'|'-Syyu'|'-Suyy'|'-Syuy') option=update ; pacmanarg="$1" ;;
     '-Sc'|'-Scc') option=clean ; pacmanarg="$1" ;;
     '-U') option=make ; shift ; MAKEPKGOPTS+=("$@") ; break ;;
     '-G') option=download ;;
