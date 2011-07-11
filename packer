@@ -178,7 +178,11 @@ finddeps() {
       if existsinpacman "$dep"; then
         pacmandeps+=("$dep")
       elif existsinaur "$dep"; then
-        aurdeps=("$dep" "${aurdeps}")
+        if [[ $aurdeps ]]; then
+          aurdeps=("$dep" "${aurdeps[@]}")
+        else
+          aurdeps=("$dep")
+        fi
         checkdeps+=("$dep")
       elif providedinpacman "$dep"; then
         pacmandeps+=("$providepkg")
@@ -290,6 +294,12 @@ aurinstall() {
     curl -Lfs "$PKGURL/$1/$1.tar.gz" > "$1.tar.gz"
     tar xf "$1.tar.gz"
     cd "$1"
+
+    # customizepkg
+    if [[ -f "/etc/customizepkg.d/$1" ]] && type -t customizepkg &>/dev/null; then
+      echo "Applying customizepkg instructions..."
+      customizepkg --modify
+    fi
   fi
 
   # Allow user to skip package installation
@@ -500,9 +510,9 @@ while [[ $1 ]]; do
     '-Ss') option=search ;;
     '-Ssq'|'-Sqs') option=search ; quiet='1' ;;
     '-Si') option=info ;;
-    '-Su'|'-Suy'|'-Syu'|'-Syyu'|'-Suyy'|'-Syuy') option=update ; pacmanarg="$1" ;;
     '-Sc'|'-Scc') option=clean ; pacmanarg="$1" ;;
     '-U') option=make ; shift ; MAKEPKGOPTS+=("$@") ; break ;;
+    -S*u*) option=update ; pacmanarg="$1" ;;
     '-G') option=download ;;
     '-h'|'--help') usage ;;
     '--quiet') quiet='1' ;;
