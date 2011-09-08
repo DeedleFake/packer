@@ -485,21 +485,6 @@ nap() {
   done
 }
 
-# join three lines into one
-paste3() {
-  i=0
-  while read line
-  do
-    (( i++ ))
-    line="${line:--}"
-    case "$(( $i % 3))" in
-      1) a="$line" ;;
-      2) b="$line" ;;
-      0) echo -e "$a\t$b\t$line" ;;
-    esac
-  done
-}
-
 # Argument parsing
 [[ $1 ]] || usage
 packageargs=()
@@ -687,7 +672,7 @@ if [[ $option = search || $option = searchinstall ]]; then
       echo -e "$results" | fmt -"$_WIDTH" -s
     else  # interactive
       echo -e "$results" | fmt -"$_WIDTH" -s | nl -v 0 -w 1 -s ' ' -b 'p^[^ ]'
-    fi
+    fi | sed '/^$/d'
     pacname=( $(pacman -Ssq -- "${packageargs[@]}") )
     pactotal="${#pacname[@]}"
   else
@@ -698,7 +683,7 @@ if [[ $option = search || $option = searchinstall ]]; then
   for package in "${packageargs[@]}"; do
     curl -LfGs --data-urlencode "arg=$package" "$RPCURL=search" | \
     jshon -Q -e results -a -e Name -u -p -e Version -u -p -e Description -u | \
-    paste3 > "$tmpdir/$package.search" &
+    sed 's/^$/-/' |  paste -s -d "\t\t\n" > "$tmpdir/$package.search" &
   done
   wait
   cp "$tmpdir/${packageargs[0]}.search" "$tmpdir/search.results"
@@ -706,6 +691,7 @@ if [[ $option = search || $option = searchinstall ]]; then
     grep -xFf "$tmpdir/search.results" "$tmpdir/${packageargs[$i]}.search" > "$tmpdir/search.results-2"
     mv "$tmpdir/search.results-2" "$tmpdir/search.results"
   done
+  sed -i '/^$/d' "$tmpdir/search.results"
 
   # Prepare tmp file and arrays
   IFS=$'\n'
