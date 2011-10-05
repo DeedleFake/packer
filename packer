@@ -124,7 +124,7 @@ isdevel() {
 # Tests whether $1 exists on the aur
 existsinaur() {
   rpcinfo "$1"
-  ! grep -Fq ':"No results found"' "$tmpdir/$1.info"
+  [[ "$(jshon -Qe type -u < "$tmpdir/$1.info")" = "info" ]]
 }
 
 # Tests whether $1 exists in pacman
