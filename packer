@@ -1,6 +1,19 @@
 #!/bin/bash
 # Copyright Matthew Bruenig <matthewbruenig@gmail.com>
-# Licensed under GPL version 3
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+[[ $PACMAN ]] || PACMAN="pacman"
 
 # set tmpfile stuff, clean tmpdir
 tmpdir="${TMPDIR:-/tmp}/packertmp-$UID"
@@ -15,7 +28,7 @@ dbpath="$(cat $pacmanconf | sed -n '/^\s*DBPath\s*=\s*\([a-zA-Z0-9\s/\\]\+\)/{s/
 [[ "$dbpath" == "" ]] && dbpath='/var/lib/pacman'
 
 RPCURL="https://aur.archlinux.org/rpc.php?type"
-PKGURL="https://aur.archlinux.org/packages"
+PKGURL="https://aur.archlinux.org"
 
 pacman="$(type -p pacman)"
 outputpacman="$(type -p pacman-color)"
@@ -82,11 +95,10 @@ runasroot() {
   if [[ $UID -eq 0 ]]; then
     "$@"
   elif sudo -v &>/dev/null && sudo -l "$@" &>/dev/null; then
-    sudo "$@"
+    sudo -E "$@"
   else
     echo -n "root "
-    # Hack: need to echo to make sure all of the args get in the single set of quotes
-    su root -c "$(echo $@)"
+    su -c "$(printf '%q ' "$@")"
   fi
 }
 
@@ -98,9 +110,7 @@ sourcemakepkgconf() {
 
 # Parse IgnorePkg and --ignore, put in globally accessible ignoredpackages array
 getignoredpackages() {
-  IFS=','
-  ignoredpackages=($ignorearg)
-  IFS=$'\n'" "
+  IFS=',' read -ra ignoredpackages <<< "$ignorearg"
   ignoredpackages+=( $(grep '^ *IgnorePkg' "$pacmanconf" | cut -d '=' -f 2-) )
 }
 
@@ -139,8 +149,7 @@ existsinpacman() {
 
 # Tests whether $1 is provided in pacman, sets globally accessibly providepkg var
 providedinpacman() {
-  IFS=$'\n'
-  providepkg=( $(pacman -Ssq -- "^$1$") )
+  IFS=$'\n' read -rd '' -a providepkg < <(pacman -Ssq -- "^$1$")
 }
 
 # Tests whether $1 exists in a pacman group
@@ -160,6 +169,7 @@ scrapeaurdeps() {
   . "$tmpdir/$1.PKGBUILD"
   IFS=$'\n'
   dependencies=( $(echo -e "${depends[*]}\n${makedepends[*]}" | sed -e 's/=.*//' -e 's/>.*//' -e 's/<.*//'| sort -u) )
+  unset IFS
 }
 
 # Finds dependencies of package $1
@@ -256,9 +266,15 @@ rpcinfo() {
   fi
 }
 
+pkglink() {
+  rpcinfo $1
+  echo "${PKGURL}$(jshon -e results -e URLPath -u < "$tmpdir/$1.info")"
+}
+
 pkginfo() {
   if ! [[ -f "$tmpdir/$1.PKGBUILD" ]]; then
-    curl -Lfs "$PKGURL/$1/PKGBUILD" > "$tmpdir/$1.PKGBUILD"
+    pkgpath=$(pkglink $1)
+    curl -Lfs "${pkgpath%/*}/PKGBUILD" > "$tmpdir/$1.PKGBUILD"
   fi
 }
 
@@ -303,7 +319,7 @@ aurinstall() {
     [[ -d $dir ]] && rm -rf $dir
     mkdir -p "$dir"
     cd "$dir"
-    curl -Lfs "$PKGURL/$1/$1.tar.gz" > "$1.tar.gz"
+    curl -Lfs "$(pkglink $1)" > "$1.tar.gz"
     tar xf "$1.tar.gz"
     cd "$1"
 
@@ -346,9 +362,9 @@ aurinstall() {
 
   [[ $? -ne 0 ]] && echo "The build failed." && return 1
   if  [[ $2 = dependency ]]; then
-    runasroot pacman ${PACOPTS[@]} --asdeps -U $pkgname-*$PKGEXT
+    runasroot $PACMAN ${PACOPTS[@]} --asdeps -U $pkgname-*$PKGEXT
   elif [[ $2 = explicit ]]; then
-    runasroot pacman ${PACOPTS[@]} -U $pkgname-*$PKGEXT
+    runasroot $PACMAN ${PACOPTS[@]} -U $pkgname-*$PKGEXT
   fi
 }
 
@@ -401,7 +417,7 @@ installhandling() {
  
   # First install the explicit pacman packages, let pacman prompt
   if [[ $pacmanpackages ]]; then
-    runasroot pacman "${PACOPTS[@]}" -S -- "${pacmanpackages[@]}"
+    runasroot $PACMAN "${PACOPTS[@]}" -S -- "${pacmanpackages[@]}"
   fi
   if [[ -z $aurtargets ]]; then
     exit
@@ -432,8 +448,8 @@ installhandling() {
     echo -e "${COLOR6}Aur Targets    ($((${#aurtargets[@]}))):${ENDCOLOR} ${aurtargets[@]}"
   fi
   if [[ $pacmandepends ]]; then
-    IFS=$'\n'
-    pacmandepends=( $(printf "%s\n" "${pacmandepends[@]}" | sort -u) )
+    IFS=$'\n' read -rd '' -a pacmandepends < \
+      <(printf "%s\n" "${pacmandepends[@]}" | sort -u)
     echo -e "${COLOR6}Pacman Targets (${#pacmandepends[@]}):${ENDCOLOR} ${pacmandepends[@]}"
   fi
 
@@ -447,7 +463,7 @@ installhandling() {
 
   # Install pacman dependencies
   if [[ $pacmandepends ]]; then
-    runasroot pacman --noconfirm --asdeps -S -- "${pacmandepends[@]}" || err "Installation failed."
+    runasroot $PACMAN --noconfirm --asdeps -S -- "${pacmandepends[@]}" || err "Installation failed."
   fi 
 
   # Install aur dependencies
@@ -568,13 +584,12 @@ if [[ $option = update ]]; then
   sourcemakepkgconf
   # Pacman update
   if ! [[ $auronly ]]; then
-    runasroot pacman "${PACOPTS[@]}" "$pacmanarg"
+    runasroot $PACMAN "${PACOPTS[@]}" "$pacmanarg"
   fi
 
   # Aur update
   echo -e "${COLOR5}:: ${COLOR1}Synchronizing aur database...${ENDCOLOR}"
-  IFS=$'\n'
-  packages=( $(pacman -Qm) )
+  IFS=$'\n' read -rd '' -a packages < <(pacman -Qm)
   newpackages=()
   checkignores=()
   total="${#packages[@]}"
@@ -651,7 +666,7 @@ if [[ $option = download ]]; then
   done
 
   for package in "${pkglist[@]}"; do
-    curl -Lfs "$PKGURL/$package/$package.tar.gz" > "$package.tar.gz"
+    curl -Lfs "$(pkglink $package)" > "$package.tar.gz"
     tar xf "$package.tar.gz" 
     [[ "$keeptar" != "1" ]] && rm -f "$package.tar.gz"
   done
@@ -682,8 +697,8 @@ if [[ $option = search || $option = searchinstall ]]; then
   # Aur searching and tmpfile preparation
   for package in "${packageargs[@]}"; do
     curl -LfGs --data-urlencode "arg=$package" "$RPCURL=search" | \
-    jshon -Q -e results -a -e Name -u -p -e Version -u -p -e Description -u | \
-    sed 's/^$/-/' |  paste -s -d "\t\t\n" > "$tmpdir/$package.search" &
+    jshon -Q -e results -a -e Name -u -p -e Version -u -p -e NumVotes -u -p -e Description -u | \
+    sed 's/^$/-/' |  paste -s -d "\t\t\t\n" | sort -nr -k 3 > "$tmpdir/$package.search" &
   done
   wait
   cp "$tmpdir/${packageargs[0]}.search" "$tmpdir/search.results"
@@ -694,8 +709,7 @@ if [[ $option = search || $option = searchinstall ]]; then
   sed -i '/^$/d' "$tmpdir/search.results"
 
   # Prepare tmp file and arrays
-  IFS=$'\n'
-  aurname=( $(cut -f 1 "$tmpdir/search.results") )
+  IFS=$'\n' read -rd '' -a aurname < <(cut -f 1 "$tmpdir/search.results")
   aurtotal="${#aurname[@]}"
   alltotal="$(($pactotal+$aurtotal))"
   # Echo out the -Ss formatted package information
@@ -705,16 +719,17 @@ if [[ $option = search || $option = searchinstall ]]; then
     if [[ $quiet ]]; then
       printf "%s\n" ${aurname[@]}
     elif [[ -s "$tmpdir/search.results" ]]; then
-      printf "${COLOR3}aur/${COLOR1}%s ${COLOR2}%s${ENDCOLOR}\n    %s\n" $(cat "$tmpdir/search.results")
+      printf "${COLOR3}aur/${COLOR1}%s ${COLOR2}%s${ENDCOLOR} (%s)\n    %s\n" $(cat "$tmpdir/search.results")
     fi
   else
     # interactive
     if [[ $quiet ]]; then
       nl -v ${pactotal:-0} -w 1 -s ' ' <(cut -f 1 "$tmpdir/search.results")
     elif [[ -s "$tmpdir/search.results" ]]; then
-      printf "%d ${COLOR3}aur/${COLOR1}%s ${COLOR2}%s${ENDCOLOR}\n    %s\n" $(nl -v ${pactotal:-0} -w 1 < "$tmpdir/search.results")
+      printf "%d ${COLOR3}aur/${COLOR1}%s ${COLOR2}%s${ENDCOLOR} (%s)\n    %s\n" $(nl -v ${pactotal:-0} -w 1 < "$tmpdir/search.results")
     fi
   fi | fmt -"$_WIDTH" -s
+  unset IFS
 
   # Prompt and install selected numbers
   if [[ $option = searchinstall ]]; then
@@ -732,7 +747,6 @@ if [[ $option = search || $option = searchinstall ]]; then
     
     # Parse answer
     if [[ $REPLY ]]; then
-      IFS=' '
       for num in $REPLY; do
         if [[ $num -lt $alltotal ]]; then
           pkglist+=("${allpackages[$num]}")
